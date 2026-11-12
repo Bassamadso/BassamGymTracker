@@ -9,12 +9,15 @@ import React, {
   useRef,
 } from 'react';
 import { AppState } from 'react-native';
+import { openDefaultDataStore } from './database';
 import { EXERCISE_CATALOG } from './exerciseCatalog';
 import { bottomOfRange } from './plans';
+import { DataStore, Persisted } from './storage';
 import { Exercise, MuscleGroup, Routine, Workout, WorkoutSet } from './types';
 import { uid } from './utils';
 
-const STORAGE_KEY = 'gymtracker:v1';
+/** Where the app saved everything before SQLite; now only read once to import. */
+const LEGACY_STORAGE_KEY = 'gymtracker:v1';
 
 const DEFAULT_EXERCISES: Exercise[] = [
   ['Bench Press', 'Chest'],
@@ -80,16 +83,6 @@ export interface State {
   routines: Routine[]; // weekly plan, one per training day
   rest: { endsAt: number; total: number } | null; // running rest timer
 }
-
-/** Fields written to storage. */
-const PERSISTED = [
-  'exercises',
-  'history',
-  'active',
-  'restSeconds',
-  'routines',
-  'rest',
-] as const;
 
 type Action =
   | { type: 'load'; payload: Partial<State> }
@@ -410,49 +403,111 @@ interface Store {
 
 const StoreContext = createContext<Store | null>(null);
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
+/**
+ * Combines the saved exercises (custom and archived ones) with the built-in
+ * defaults and catalog, which ship with the app and are never saved.
+ */
+export function mergeExercises(saved: Exercise[]): Exercise[] {
+  const byId = new Map(saved.map(e => [e.id, e]));
+  const defaultIds = new Set(DEFAULT_EXERCISES.map(e => e.id));
+  return withCatalog([
+    // A saved copy wins, which is how an archived default stays archived
+    ...DEFAULT_EXERCISES.map(e => byId.get(e.id) ?? e),
+    ...saved.filter(e => !defaultIds.has(e.id)),
+  ]);
+}
+
+/** The pre-SQLite save, read straight into memory. Never written back. */
+async function readLegacy(): Promise<Partial<State>> {
+  try {
+    const raw = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+    return raw ? sanitize(JSON.parse(raw)) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Opens the database, imports the old save on the first launch after the
+ * upgrade, and loads everything. If SQLite can't be used at all, the app still
+ * starts from the old save but `store` is null, so nothing is ever written —
+ * the same rule as before: never overwrite data we couldn't read.
+ */
+async function bootstrap(
+  openStore: () => Promise<DataStore>,
+): Promise<{ store: DataStore | null; payload: Partial<State> }> {
+  try {
+    const store = await openStore();
+    if (await store.needsLegacyImport()) {
+      // Throws if AsyncStorage is unreadable: better to retry next launch than
+      // to mark the import done with nothing imported
+      await store.importLegacy(await AsyncStorage.getItem(LEGACY_STORAGE_KEY));
+    }
+    const { exercises = [], ...rest } = await store.load();
+    return { store, payload: { ...rest, exercises: mergeExercises(exercises) } };
+  } catch {
+    return { store: null, payload: await readLegacy() };
+  }
+}
+
+/** Save changes this long after the last one, so typing isn't one write per key. */
+const SAVE_DELAY_MS = 400;
+
+export function StoreProvider({
+  children,
+  openStore = openDefaultDataStore,
+}: {
+  children: React.ReactNode;
+  /** Where data is kept; tests pass an in-memory database. */
+  openStore?: () => Promise<DataStore>;
+}) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  // Never overwrite storage if we couldn't read it — that would wipe real data
-  const canPersist = useRef(true);
-  const pending = useRef<string | null>(null);
+  const store = useRef<DataStore | null>(null);
+  // What the database holds right now; saves write the difference from this
+  const saved = useRef<Persisted | null>(null);
+  const latest = useRef<State>(state);
+  // Saves run one after another so two never overlap
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  // Read once at mount: the database is opened a single time per app run
+  const open = useRef(openStore);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then(raw => {
-        let payload: Partial<State> = {};
-        if (raw) {
-          try {
-            payload = sanitize(JSON.parse(raw));
-          } catch {
-            // Keep a copy of the unreadable save before starting fresh
-            AsyncStorage.setItem(
-              `${STORAGE_KEY}:corrupt:${Date.now()}`,
-              raw,
-            ).catch(() => {});
-          }
-        }
-        dispatch({ type: 'load', payload });
-      })
-      .catch(() => {
-        canPersist.current = false;
-        dispatch({ type: 'load', payload: {} });
-      });
+    let cancelled = false;
+    bootstrap(open.current).then(({ store: opened, payload }) => {
+      if (cancelled) return;
+      store.current = opened;
+      dispatch({ type: 'load', payload });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const flush = useCallback(() => {
-    if (pending.current === null || !canPersist.current) return;
-    const json = pending.current;
-    pending.current = null;
-    AsyncStorage.setItem(STORAGE_KEY, json).catch(() => {});
+    const target = store.current;
+    if (!target) return;
+    queue.current = queue.current.then(async () => {
+      const prev = saved.current;
+      const next = latest.current;
+      if (!prev || prev === next) return;
+      try {
+        await target.save(prev, next);
+        saved.current = next;
+      } catch {
+        // Keep the old baseline: the next save retries these changes too
+      }
+    });
   }, []);
 
-  // Debounced so typing in set inputs doesn't serialize everything per key
   useEffect(() => {
-    if (!state.loaded) return;
-    const data: Record<string, unknown> = {};
-    for (const k of PERSISTED) data[k] = state[k];
-    pending.current = JSON.stringify(data);
-    const t = setTimeout(flush, 400);
+    latest.current = state;
+    if (!state.loaded || !store.current) return;
+    if (!saved.current) {
+      // The state that was just loaded is what the database already holds
+      saved.current = state;
+      return;
+    }
+    const t = setTimeout(flush, SAVE_DELAY_MS);
     return () => clearTimeout(t);
   }, [state, flush]);
 
