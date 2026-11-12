@@ -1,0 +1,9 @@
+<resources>
+
+    <!-- Android 12+ system splash screen: logo on black. -->
+    <style name="LaunchTheme" parent="AppTheme">
+        <item name="android:windowSplashScreenBackground">@color/brand_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/splash_icon</item>
+    </style>
+
+</resources>

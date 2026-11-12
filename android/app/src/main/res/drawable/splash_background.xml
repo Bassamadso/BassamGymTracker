@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch screen for Android 11 and below: logo centred on black. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/brand_bg" />
+    <item>
+        <bitmap android:gravity="center" android:src="@mipmap/splash_icon" />
+    </item>
+</layer-list>
