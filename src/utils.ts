@@ -29,20 +29,6 @@ export const workoutVolume = (w: Workout) =>
 export const completedSets = (w: Workout) =>
   w.exercises.reduce((n, ex) => n + ex.sets.filter(s => s.done).length, 0);
 
-export const formatDate = (ts: number) =>
-  new Date(ts).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-
-export const formatDuration = (ms: number) => {
-  const totalMin = Math.max(0, Math.floor(ms / 60000));
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-};
-
 export const formatTimer = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(total / 3600);
@@ -62,29 +48,36 @@ export const startOfWeek = (ts: number) => {
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** "1,440 kg" or "12.3 t" for big totals. */
-export const formatKg = (kg: number) =>
-  kg >= 10000
-    ? `${(kg / 1000).toFixed(1)} t`
-    : `${Math.round(kg).toLocaleString()} kg`;
-
 /** Estimated one-rep max (Epley). */
 export const e1rm = (weight: number, reps: number) =>
   reps <= 0 ? 0 : reps === 1 ? weight : weight * (1 + reps / 30);
 
-export const greeting = () => {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-};
+/**
+ * Arabic-Indic (٠–٩) and Persian (۰–۹) digits → 0–9, and the Arabic decimal
+ * separator (٫) and comma (،) → ".". Some keyboards type these in Arabic mode.
+ */
+export const toAsciiDigits = (t: string) =>
+  t
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u066B\u060C]/g, '.')
+    .replace(/\u066C/g, '');
 
 /** Keeps digits and a single decimal point; accepts "," as the separator. */
 export const sanitizeWeight = (t: string) => {
-  const [int, ...rest] = t
+  const [int, ...rest] = toAsciiDigits(t)
     .replace(/,/g, '.')
     .replace(/[^\d.]/g, '')
     .split('.');
   return rest.length ? `${int}.${rest.join('')}` : int;
 };
+
+/** Keeps only digits (reps), accepting Arabic-Indic digits too. */
+export const sanitizeReps = (t: string) => toAsciiDigits(t).replace(/\D/g, '');
+
+/** Keeps digits and "-" for a rep target such as "8-12". */
+export const sanitizeRepRange = (t: string) =>
+  toAsciiDigits(t).replace(/[^\d-]/g, '');
 
 const topWeight = (sets: WorkoutSet[]) =>
   Math.max(0, ...sets.map(s => parseFloat(s.weight) || 0));

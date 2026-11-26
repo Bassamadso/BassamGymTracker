@@ -2,8 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import App from '../App';
+import { createI18n } from '../src/i18n/core';
 import { buildPlan, SPLITS } from '../src/plans';
 import { initialState } from '../src/store';
+
+const { t } = createI18n('en', false);
 
 jest.mock(
   'react-native-safe-area-context',
@@ -30,7 +33,7 @@ test('home invites the user to set up a plan', async () => {
 });
 
 test('home shows the plan days and starts the next one', async () => {
-  const routines = buildPlan(SPLITS[0], initialState.exercises);
+  const routines = buildPlan(SPLITS[0], initialState.exercises, t);
   await AsyncStorage.setItem('gymtracker:v1', JSON.stringify({ routines }));
   await render();
   const json = textOf(r);
@@ -59,7 +62,7 @@ describe('a started plan day', () => {
     );
 
   const startPush = async () => {
-    const routines = buildPlan(SPLITS[0], initialState.exercises);
+    const routines = buildPlan(SPLITS[0], initialState.exercises, t);
     await AsyncStorage.setItem('gymtracker:v1', JSON.stringify({ routines }));
     await render();
     await ReactTestRenderer.act(async () =>
@@ -163,7 +166,7 @@ describe('day editor', () => {
     );
 
   const openPushEditor = async () => {
-    const routines = buildPlan(SPLITS[0], initialState.exercises);
+    const routines = buildPlan(SPLITS[0], initialState.exercises, t);
     await AsyncStorage.setItem('gymtracker:v1', JSON.stringify({ routines }));
     await render();
     // First "Edit" on the home screen belongs to the Push day

@@ -88,7 +88,7 @@ type Action =
   | { type: 'load'; payload: Partial<State> }
   | { type: 'addExercise'; exercise: Exercise }
   | { type: 'deleteExercise'; id: string }
-  | { type: 'startWorkout' }
+  | { type: 'startWorkout'; name?: string } // UI passes the localized name
   | { type: 'renameWorkout'; name: string }
   | { type: 'addToWorkout'; exerciseIds: string[] }
   | { type: 'removeFromWorkout'; workoutExerciseId: string }
@@ -151,19 +151,16 @@ export function reducer(state: State, action: Action): State {
         ),
       };
 
-    case 'startWorkout': {
-      const hour = new Date().getHours();
-      const part = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
+    case 'startWorkout':
       return {
         ...state,
         active: {
           id: uid(),
-          name: `${part} Workout`,
+          name: action.name || 'Workout',
           startedAt: Date.now(),
           exercises: [],
         },
       };
-    }
 
     case 'renameWorkout':
       return updateActive(state, w => ({ ...w, name: action.name }));

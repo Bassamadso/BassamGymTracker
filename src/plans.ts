@@ -1,11 +1,14 @@
+import type { MessageKey } from './i18n/en';
+import type { Translate } from './i18n/core';
 import { Exercise, Routine, Workout } from './types';
 import { uid } from './utils';
 
+/** Exercises are matched by their English name, whatever the UI language. */
 type Item = [name: string, sets: number, reps: string];
-type DayTemplate = { name: string; items: Item[] };
+type DayTemplate = { name: MessageKey; items: Item[] };
 
 const PUSH: DayTemplate = {
-  name: 'Push',
+  name: 'day.push',
   items: [
     ['Bench Press', 4, '6-8'],
     ['Incline Dumbbell Press', 3, '8-10'],
@@ -15,7 +18,7 @@ const PUSH: DayTemplate = {
   ],
 };
 const PULL: DayTemplate = {
-  name: 'Pull',
+  name: 'day.pull',
   items: [
     ['Deadlift', 3, '5'],
     ['Pull-up', 3, '6-10'],
@@ -25,7 +28,7 @@ const PULL: DayTemplate = {
   ],
 };
 const LEGS: DayTemplate = {
-  name: 'Legs',
+  name: 'day.legs',
   items: [
     ['Squat', 4, '6-8'],
     ['Romanian Deadlift', 3, '8-10'],
@@ -35,7 +38,7 @@ const LEGS: DayTemplate = {
   ],
 };
 const UPPER: DayTemplate = {
-  name: 'Upper',
+  name: 'day.upper',
   items: [
     ['Bench Press', 4, '6-8'],
     ['Barbell Row', 4, '6-8'],
@@ -46,7 +49,7 @@ const UPPER: DayTemplate = {
   ],
 };
 const LOWER: DayTemplate = {
-  name: 'Lower',
+  name: 'day.lower',
   items: [
     ['Squat', 4, '6-8'],
     ['Romanian Deadlift', 3, '8-10'],
@@ -57,7 +60,7 @@ const LOWER: DayTemplate = {
   ],
 };
 const PUSH_B: DayTemplate = {
-  name: 'Push B',
+  name: 'day.pushB',
   items: [
     ['Overhead Press', 4, '6-8'],
     ['Incline Dumbbell Press', 3, '8-10'],
@@ -67,7 +70,7 @@ const PUSH_B: DayTemplate = {
   ],
 };
 const PULL_B: DayTemplate = {
-  name: 'Pull B',
+  name: 'day.pullB',
   items: [
     ['Pull-up', 4, '6-10'],
     ['Seated Cable Row', 3, '8-12'],
@@ -77,7 +80,7 @@ const PULL_B: DayTemplate = {
   ],
 };
 const LEGS_B: DayTemplate = {
-  name: 'Legs B',
+  name: 'day.legsB',
   items: [
     ['Leg Press', 4, '8-10'],
     ['Romanian Deadlift', 3, '8-10'],
@@ -88,47 +91,50 @@ const LEGS_B: DayTemplate = {
   ],
 };
 
-const rename = (t: DayTemplate, name: string): DayTemplate => ({ ...t, name });
+const rename = (t: DayTemplate, name: MessageKey): DayTemplate => ({
+  ...t,
+  name,
+});
 
 export interface SplitTemplate {
   days: number;
-  title: string;
-  description: string;
+  titleKey: MessageKey;
+  descriptionKey: MessageKey;
   template: DayTemplate[];
 }
 
 export const SPLITS: SplitTemplate[] = [
   {
     days: 3,
-    title: 'Push · Pull · Legs',
-    description: 'Each muscle once a week. Great place to start.',
+    titleKey: 'split.d3.title',
+    descriptionKey: 'split.d3.desc',
     template: [PUSH, PULL, LEGS],
   },
   {
     days: 4,
-    title: 'Upper · Lower',
-    description: 'Each muscle twice a week with a simple rotation.',
+    titleKey: 'split.d4.title',
+    descriptionKey: 'split.d4.desc',
     template: [
-      rename(UPPER, 'Upper A'),
-      rename(LOWER, 'Lower A'),
-      rename(UPPER, 'Upper B'),
-      rename(LOWER, 'Lower B'),
+      rename(UPPER, 'day.upperA'),
+      rename(LOWER, 'day.lowerA'),
+      rename(UPPER, 'day.upperB'),
+      rename(LOWER, 'day.lowerB'),
     ],
   },
   {
     days: 5,
-    title: 'PPL + Upper · Lower',
-    description: 'Push, pull and legs, then a lighter upper/lower pair.',
+    titleKey: 'split.d5.title',
+    descriptionKey: 'split.d5.desc',
     template: [PUSH, PULL, LEGS, UPPER, LOWER],
   },
   {
     days: 6,
-    title: 'Push · Pull · Legs ×2',
-    description: 'High frequency with two variations of each day.',
+    titleKey: 'split.d6.title',
+    descriptionKey: 'split.d6.desc',
     template: [
-      rename(PUSH, 'Push A'),
-      rename(PULL, 'Pull A'),
-      rename(LEGS, 'Legs A'),
+      rename(PUSH, 'day.pushA'),
+      rename(PULL, 'day.pullA'),
+      rename(LEGS, 'day.legsA'),
       PUSH_B,
       PULL_B,
       LEGS_B,
@@ -136,15 +142,19 @@ export const SPLITS: SplitTemplate[] = [
   },
 ];
 
-/** Turns a split template into routines, matching exercises by name. */
+/**
+ * Turns a split template into routines, matching exercises by name. Day names
+ * are written in the language of `t` — they're saved as the user's own text.
+ */
 export function buildPlan(
   split: SplitTemplate | { days: number; template?: undefined },
   exercises: Exercise[],
+  t: Translate,
 ): Routine[] {
   if (!split.template) {
     return Array.from({ length: split.days }, (_, i) => ({
       id: uid(),
-      name: `Day ${i + 1}`,
+      name: t('plan.day', { n: i + 1 }),
       exercises: [],
     }));
   }
@@ -153,7 +163,7 @@ export function buildPlan(
   );
   return split.template.map(day => ({
     id: uid(),
-    name: day.name,
+    name: t(day.name),
     exercises: day.items
       .filter(([name]) => byName.has(name))
       .map(([name, sets, reps]) => ({

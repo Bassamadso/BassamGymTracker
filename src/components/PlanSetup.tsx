@@ -5,13 +5,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useI18n } from '../i18n';
 import { buildPlan, SPLITS } from '../plans';
 import { useStore } from '../store';
 import { colors, spacing, type } from '../theme';
+import { Text } from './Text';
 import { Button, Card, Header } from './ui';
 
 const DAY_OPTIONS = [3, 4, 5, 6];
@@ -25,12 +26,13 @@ export function PlanSetup({
   onClose: () => void;
 }) {
   const { state, dispatch, exerciseById } = useStore();
+  const { t, exerciseName, ltr } = useI18n();
   const [days, setDays] = useState(3);
   const [custom, setCustom] = useState(false);
   const split = SPLITS.find(s => s.days === days)!;
   const preview = useMemo(
-    () => buildPlan(custom ? { days } : split, state.exercises),
-    [custom, days, split, state.exercises],
+    () => buildPlan(custom ? { days } : split, state.exercises, t),
+    [custom, days, split, state.exercises, t],
   );
 
   const apply = () => {
@@ -39,14 +41,10 @@ export function PlanSetup({
       onClose();
     };
     if (state.routines.length) {
-      Alert.alert(
-        'Replace your plan?',
-        'Your current training days will be replaced. Logged workouts are kept.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Replace', style: 'destructive', onPress: save },
-        ],
-      );
+      Alert.alert(t('plan.replaceTitle'), t('plan.replaceBody'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.replace'), style: 'destructive', onPress: save },
+      ]);
     } else {
       save();
     }
@@ -56,14 +54,18 @@ export function PlanSetup({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.root}>
         <Header
-          kicker="Weekly plan"
-          title="Your split"
-          right={<Button title="Cancel" variant="ghost" onPress={onClose} />}
+          kicker={t('plan.weekly')}
+          title={t('plan.yourSplit')}
+          right={
+            <Button
+              title={t('common.cancel')}
+              variant="ghost"
+              onPress={onClose}
+            />
+          }
         />
         <ScrollView contentContainerStyle={styles.body}>
-          <Text style={styles.question}>
-            How many days a week do you train?
-          </Text>
+          <Text style={styles.question}>{t('plan.howMany')}</Text>
           <View style={styles.days}>
             {DAY_OPTIONS.map(d => (
               <Pressable
@@ -71,14 +73,14 @@ export function PlanSetup({
                 onPress={() => setDays(d)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: d === days }}
-                accessibilityLabel={`${d} days per week`}
+                accessibilityLabel={t('plan.daysPerWeek', { count: d })}
                 style={[styles.day, d === days && styles.dayOn]}
               >
                 <Text style={[styles.dayNum, d === days && styles.dayTextOn]}>
                   {d}
                 </Text>
                 <Text style={[styles.dayLabel, d === days && styles.dayTextOn]}>
-                  days
+                  {t('plan.days')}
                 </Text>
               </Pressable>
             ))}
@@ -90,7 +92,7 @@ export function PlanSetup({
               style={[styles.mode, !custom && styles.modeOn]}
             >
               <Text style={[styles.modeText, !custom && styles.modeTextOn]}>
-                Recommended
+                {t('plan.recommended')}
               </Text>
             </Pressable>
             <Pressable
@@ -98,43 +100,46 @@ export function PlanSetup({
               style={[styles.mode, custom && styles.modeOn]}
             >
               <Text style={[styles.modeText, custom && styles.modeTextOn]}>
-                Build my own
+                {t('plan.custom')}
               </Text>
             </Pressable>
           </View>
 
           {custom ? (
             <Text style={styles.desc}>
-              {days} empty days. Name them and add your own exercises after.
+              {t('plan.emptyDays', { count: days })}
             </Text>
           ) : (
             <>
-              <Text style={styles.splitTitle}>{split.title}</Text>
-              <Text style={styles.desc}>{split.description}</Text>
+              <Text style={styles.splitTitle}>{t(split.titleKey)}</Text>
+              <Text style={styles.desc}>{t(split.descriptionKey)}</Text>
             </>
           )}
 
           {preview.map((r, i) => (
             <Card key={r.id}>
-              <Text style={type.kicker}>Day {i + 1}</Text>
+              <Text style={type.kicker}>{t('plan.day', { n: i + 1 })}</Text>
               <Text style={styles.routineName}>{r.name}</Text>
               {r.exercises.length ? (
-                r.exercises.map(e => (
-                  <Text key={e.id} style={styles.exLine}>
-                    {exerciseById(e.exerciseId)?.name}
-                    <Text style={styles.muted}>
-                      {'  '}
-                      {e.sets} × {e.reps}
+                r.exercises.map(e => {
+                  const ex = exerciseById(e.exerciseId);
+                  return (
+                    <Text key={e.id} style={styles.exLine}>
+                      {ex ? exerciseName(ex) : t('workout.deletedExercise')}
+                      <Text style={styles.muted}>
+                        {'  '}
+                        {ltr(`${e.sets} × ${e.reps}`)}
+                      </Text>
                     </Text>
-                  </Text>
-                ))
+                  );
+                })
               ) : (
-                <Text style={styles.muted}>No exercises yet</Text>
+                <Text style={styles.muted}>{t('common.noExercises')}</Text>
               )}
             </Card>
           ))}
 
-          <Button big title="USE THIS PLAN" onPress={apply} />
+          <Button big title={t('plan.use')} onPress={apply} />
         </ScrollView>
       </SafeAreaView>
     </Modal>

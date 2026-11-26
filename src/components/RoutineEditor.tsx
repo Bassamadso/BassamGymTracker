@@ -7,18 +7,19 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useI18n } from '../i18n';
 import { useStore } from '../store';
 import { colors, spacing, type } from '../theme';
 import { Routine, RoutineExercise } from '../types';
-import { uid } from '../utils';
+import { sanitizeRepRange, uid } from '../utils';
 import { COLLAPSED_HEIGHT, DragSortList } from './DragSortList';
 import { ExerciseIcon } from './ExerciseIcon';
 import { ExercisePicker } from './ExercisePicker';
+import { Text } from './Text';
 import { Button, Card, Empty } from './ui';
 
 /** Edit one training day: name, exercises, target sets and reps. */
@@ -32,6 +33,7 @@ export function RoutineEditor({
   onClose: () => void;
 }) {
   const { dispatch, exerciseById } = useStore();
+  const { t, exerciseName, muscleName, ltr } = useI18n();
   const [draft, setDraft] = useState(routine);
   const [picking, setPicking] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -95,12 +97,12 @@ export function RoutineEditor({
 
   const del = () =>
     Alert.alert(
-      `Delete "${routine.name}"?`,
-      'This day is removed from your plan. Logged workouts are kept.',
+      t('editor.deleteTitle', { name: routine.name }),
+      t('editor.deleteBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             dispatch({ type: 'deleteRoutine', id: routine.id });
@@ -118,11 +120,15 @@ export function RoutineEditor({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.top}>
-            <Button title="Cancel" variant="ghost" onPress={onClose} />
+            <Button
+              title={t('common.cancel')}
+              variant="ghost"
+              onPress={onClose}
+            />
             <Text style={styles.topTitle}>
-              {isNew ? 'New day' : 'Edit day'}
+              {isNew ? t('editor.newDay') : t('editor.editDay')}
             </Text>
-            <Button title="Save" variant="ghost" onPress={save} />
+            <Button title={t('common.save')} variant="ghost" onPress={save} />
           </View>
           <ScrollView
             ref={scrollRef}
@@ -130,20 +136,20 @@ export function RoutineEditor({
             keyboardShouldPersistTaps="handled"
             scrollEnabled={!dragging}
           >
-            <Text style={type.kicker}>Name</Text>
+            <Text style={type.kicker}>{t('editor.name')}</Text>
             <TextInput
               value={draft.name}
               onChangeText={name => setDraft(d => ({ ...d, name }))}
-              placeholder="e.g. Push"
+              placeholder={t('editor.namePlaceholder')}
               placeholderTextColor={colors.muted}
               style={styles.nameInput}
-              accessibilityLabel="Day name"
+              accessibilityLabel={t('editor.nameA11y')}
             />
 
             {draft.exercises.length === 0 ? (
               <Empty
-                title="No exercises yet"
-                subtitle="Add the movements you want to train on this day."
+                title={t('common.noExercises')}
+                subtitle={t('editor.emptyBody')}
               />
             ) : (
               <View
@@ -160,7 +166,9 @@ export function RoutineEditor({
                     { collapsed, dragging: lifted, handleProps },
                   ) => {
                     const ex = exerciseById(e.exerciseId);
-                    const name = ex?.name ?? 'Deleted exercise';
+                    const name = ex
+                      ? exerciseName(ex)
+                      : t('workout.deletedExercise');
                     return (
                       <Card
                         style={[
@@ -172,7 +180,9 @@ export function RoutineEditor({
                         <View style={styles.exHead}>
                           <View
                             {...handleProps}
-                            accessibilityLabel={`Reorder ${name}. Drag to move.`}
+                            accessibilityLabel={t('reorder.handleA11y', {
+                              name,
+                            })}
                             accessibilityRole="button"
                             style={styles.handle}
                             hitSlop={{ top: 8, bottom: 8 }}
@@ -184,16 +194,18 @@ export function RoutineEditor({
                             <Text style={styles.exName} numberOfLines={1}>
                               {name}
                             </Text>
-                            <Text style={styles.muted}>{ex?.muscle}</Text>
+                            <Text style={styles.muted}>
+                              {ex ? muscleName(ex.muscle) : ''}
+                            </Text>
                           </View>
                           {collapsed ? (
                             <Text style={styles.sets}>
-                              {e.sets} × {e.reps || '–'}
+                              {ltr(`${e.sets} × ${e.reps || '–'}`)}
                             </Text>
                           ) : (
                             <IconBtn
                               label="✕"
-                              a11y={`Remove ${name}`}
+                              a11y={t('exercise.removeA11y', { name })}
                               onPress={() => remove(e.id)}
                             />
                           )}
@@ -201,11 +213,13 @@ export function RoutineEditor({
                         {collapsed ? null : (
                           <View style={styles.targets}>
                             <View style={styles.flex}>
-                              <Text style={type.kicker}>Sets</Text>
+                              <Text style={type.kicker}>
+                                {t('editor.sets')}
+                              </Text>
                               <View style={styles.stepper}>
                                 <IconBtn
                                   label="−"
-                                  a11y="Fewer sets"
+                                  a11y={t('editor.fewerSets')}
                                   onPress={() =>
                                     update(e.id, {
                                       sets: Math.max(1, e.sets - 1),
@@ -215,7 +229,7 @@ export function RoutineEditor({
                                 <Text style={styles.stepValue}>{e.sets}</Text>
                                 <IconBtn
                                   label="+"
-                                  a11y="More sets"
+                                  a11y={t('editor.moreSets')}
                                   onPress={() =>
                                     update(e.id, {
                                       sets: Math.min(10, e.sets + 1),
@@ -225,19 +239,21 @@ export function RoutineEditor({
                               </View>
                             </View>
                             <View style={styles.flex}>
-                              <Text style={type.kicker}>Target reps</Text>
+                              <Text style={type.kicker}>
+                                {t('editor.targetReps')}
+                              </Text>
                               <TextInput
                                 value={e.reps}
-                                onChangeText={t =>
+                                onChangeText={text =>
                                   update(e.id, {
-                                    reps: t.replace(/[^\d-]/g, ''),
+                                    reps: sanitizeRepRange(text),
                                   })
                                 }
                                 keyboardType="numbers-and-punctuation"
                                 placeholder="8-12"
                                 placeholderTextColor={colors.muted}
                                 style={styles.repsInput}
-                                accessibilityLabel="Target reps"
+                                accessibilityLabel={t('editor.targetReps')}
                               />
                             </View>
                           </View>
@@ -250,13 +266,17 @@ export function RoutineEditor({
             )}
 
             <Button
-              title="+  Add exercises"
+              title={t('workout.addExercises')}
               variant="secondary"
               onPress={() => setPicking(true)}
               style={styles.gap}
             />
             {!isNew ? (
-              <Button title="Delete this day" variant="ghost" onPress={del} />
+              <Button
+                title={t('editor.deleteDay')}
+                variant="ghost"
+                onPress={del}
+              />
             ) : null}
           </ScrollView>
         </KeyboardAvoidingView>

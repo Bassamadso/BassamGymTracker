@@ -6,7 +6,6 @@ import {
   ScrollView,
   SectionList,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -14,11 +13,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart } from '../components/BarChart';
 import { ExerciseForm } from '../components/ExerciseForm';
 import { ExerciseIcon } from '../components/ExerciseIcon';
+import { Text } from '../components/Text';
 import { Button, Card, Empty, Header, StatTile } from '../components/ui';
+import { useI18n } from '../i18n';
 import { useStore } from '../store';
 import { colors, spacing, type } from '../theme';
 import { Exercise, MUSCLE_GROUPS, Workout } from '../types';
-import { e1rm, formatDate } from '../utils';
+import { e1rm } from '../utils';
 
 interface Session {
   date: number;
@@ -48,22 +49,21 @@ function sessionsFor(history: Workout[], exerciseId: string): Session[] {
 
 export function ExercisesScreen() {
   const { state, dispatch } = useStore();
+  const { t, exerciseName, muscleName, matchesSearch, compare } = useI18n();
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Exercise | null>(null);
 
-  const sections = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return MUSCLE_GROUPS.map(m => ({
-      title: m,
-      data: state.exercises
-        .filter(
-          e =>
-            !e.archived && e.muscle === m && e.name.toLowerCase().includes(q),
-        )
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    })).filter(s => s.data.length > 0);
-  }, [state.exercises, query]);
+  const sections = useMemo(
+    () =>
+      MUSCLE_GROUPS.map(m => ({
+        title: muscleName(m),
+        data: state.exercises
+          .filter(e => !e.archived && e.muscle === m && matchesSearch(e, query))
+          .sort((a, b) => compare(exerciseName(a), exerciseName(b))),
+      })).filter(s => s.data.length > 0),
+    [state.exercises, query, muscleName, matchesSearch, compare, exerciseName],
+  );
 
   const summary = useMemo(() => {
     const map: Record<string, { top: number; sessions: number }> = {};
@@ -81,12 +81,12 @@ export function ExercisesScreen() {
 
   const confirmDelete = (e: Exercise) =>
     Alert.alert(
-      'Delete exercise?',
-      `"${e.name}" will be removed from your library. Past workouts keep their logged sets.`,
+      t('library.deleteTitle'),
+      t('library.deleteBody', { name: exerciseName(e) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => dispatch({ type: 'deleteExercise', id: e.id }),
         },
@@ -104,14 +104,14 @@ export function ExercisesScreen() {
         ListHeaderComponent={
           <>
             <Header
-              kicker={`${
-                state.exercises.filter(e => !e.archived).length
-              } movements`}
-              title="Library"
+              kicker={t('count.movement', {
+                count: state.exercises.filter(e => !e.archived).length,
+              })}
+              title={t('library.title')}
               right={
                 !creating ? (
                   <Button
-                    title="+ New"
+                    title={t('library.new')}
                     variant="secondary"
                     onPress={() => setCreating(true)}
                   />
@@ -128,7 +128,7 @@ export function ExercisesScreen() {
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search exercises"
+                placeholder={t('library.search')}
                 placeholderTextColor={colors.muted}
                 style={styles.search}
               />
@@ -148,27 +148,26 @@ export function ExercisesScreen() {
             >
               <ExerciseIcon exercise={item} size={52} />
               <View style={styles.flex}>
-                <Text style={styles.name}>{item.name}</Text>
+                <Text style={styles.name}>{exerciseName(item)}</Text>
                 <Text style={styles.meta}>
                   {s
-                    ? `${s.sessions} session${s.sessions > 1 ? 's' : ''}`
-                    : 'Not logged yet'}
+                    ? t('count.session', { count: s.sessions })
+                    : t('library.notLogged')}
                 </Text>
               </View>
               {s && s.top > 0 ? (
                 <View style={styles.best}>
                   <Text style={styles.bestValue}>{s.top}</Text>
-                  <Text style={styles.bestUnit}>KG BEST</Text>
+                  <Text style={styles.bestUnit}>{t('library.bestUnit')}</Text>
                 </View>
               ) : null}
+              {/* › is bidi-mirrored, so the platform already points it forward in RTL */}
               <Text style={styles.chev}>›</Text>
             </Pressable>
           );
         }}
         ListFooterComponent={
-          <Text style={styles.hint}>
-            Tap for progress · long-press to delete
-          </Text>
+          <Text style={styles.hint}>{t('library.hint')}</Text>
         }
       />
       {open ? (
@@ -186,6 +185,8 @@ function ExerciseDetail({
   onClose: () => void;
 }) {
   const { state } = useStore();
+  const { t, exerciseName, muscleName, formatDate, formatDateShort, ltr } =
+    useI18n();
   const sessions = useMemo(
     () => sessionsFor(state.history, exercise.id),
     [state.history, exercise.id],
@@ -200,9 +201,15 @@ function ExerciseDetail({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.root}>
         <Header
-          kicker={exercise.muscle}
-          title={exercise.name}
-          right={<Button title="Close" variant="ghost" onPress={onClose} />}
+          kicker={muscleName(exercise.muscle)}
+          title={exerciseName(exercise)}
+          right={
+            <Button
+              title={t('common.close')}
+              variant="ghost"
+              onPress={onClose}
+            />
+          }
         />
         <ScrollView contentContainerStyle={[styles.pad, styles.list]}>
           <View style={styles.hero}>
@@ -210,39 +217,40 @@ function ExerciseDetail({
           </View>
           {sessions.length === 0 ? (
             <Empty
-              title="No data yet"
-              subtitle="Log this exercise in a workout and your progress chart will appear here."
+              title={t('library.noDataTitle')}
+              subtitle={t('library.noDataBody')}
             />
           ) : (
             <>
               <View style={styles.tiles}>
-                <StatTile label="Best" value={`${best}`} unit="kg" />
                 <StatTile
-                  label="Est. 1RM"
-                  value={`${Math.round(best1rm)}`}
-                  unit="kg"
+                  label={t('library.best')}
+                  value={`${best}`}
+                  unit={t('unit.kg')}
                 />
                 <StatTile
-                  label="Progress"
-                  value={`${gain >= 0 ? '+' : ''}${gain}`}
-                  unit="kg"
+                  label={t('library.e1rm')}
+                  value={`${Math.round(best1rm)}`}
+                  unit={t('unit.kg')}
+                />
+                <StatTile
+                  label={t('library.progress')}
+                  value={ltr(`${gain >= 0 ? '+' : ''}${gain}`)}
+                  unit={t('unit.kg')}
                 />
               </View>
               <Card>
                 <Text style={[type.kicker, { marginBottom: spacing(4) }]}>
-                  Top weight per session
+                  {t('library.topWeight')}
                 </Text>
                 <BarChart
                   values={recent.map(s => s.top)}
-                  labels={recent.map(s =>
-                    new Date(s.date).toLocaleDateString(undefined, {
-                      month: 'numeric',
-                      day: 'numeric',
-                    }),
-                  )}
+                  labels={recent.map(s => formatDateShort(s.date))}
                 />
               </Card>
-              <Text style={[type.kicker, styles.section]}>Recent sessions</Text>
+              <Text style={[type.kicker, styles.section]}>
+                {t('library.recent')}
+              </Text>
               {[...sessions]
                 .reverse()
                 .slice(0, 8)
@@ -250,11 +258,13 @@ function ExerciseDetail({
                   <Card key={i}>
                     <View style={styles.sessionHead}>
                       <Text style={styles.name}>{formatDate(s.date)}</Text>
-                      <Text style={styles.meta}>top {s.top} kg</Text>
+                      <Text style={styles.meta}>
+                        {t('library.top', { weight: s.top })}
+                      </Text>
                     </View>
                     <Text style={styles.sessionSets}>
                       {s.sets
-                        .map(x => `${x.weight || 0}×${x.reps || 0}`)
+                        .map(x => ltr(`${x.weight || 0}×${x.reps || 0}`))
                         .join('   ')}
                     </Text>
                   </Card>

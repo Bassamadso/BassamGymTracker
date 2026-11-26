@@ -3,11 +3,11 @@ import {
   Pressable,
   StyleProp,
   StyleSheet,
-  Text,
   View,
   ViewStyle,
 } from 'react-native';
 import { colors, spacing, type } from '../theme';
+import { Text } from './Text';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 

@@ -1,13 +1,14 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { useI18n } from '../i18n';
 import { colors, spacing } from '../theme';
 import { Workout } from '../types';
 import { DAY_MS, startOfWeek } from '../utils';
-
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+import { Text } from './Text';
 
 /** Mon–Sun dots, lit on days with a finished workout. */
 export function WeekStrip({ history }: { history: Workout[] }) {
+  const { dayInitials } = useI18n();
   const weekStart = startOfWeek(Date.now());
   const todayIdx = Math.floor((Date.now() - weekStart) / DAY_MS);
   const trained = new Set(
@@ -18,7 +19,7 @@ export function WeekStrip({ history }: { history: Workout[] }) {
 
   return (
     <View style={styles.row}>
-      {DAYS.map((d, i) => {
+      {dayInitials.map((d, i) => {
         const on = trained.has(i);
         const today = i === todayIdx;
         return (

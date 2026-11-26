@@ -7,26 +7,26 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { ExercisePicker } from '../components/ExercisePicker';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PlanSection } from '../components/PlanSection';
 import { ReorderList } from '../components/ReorderList';
+import { Text } from '../components/Text';
 import { Button, Card, Header, Pill, StatTile } from '../components/ui';
 import { WeekStrip } from '../components/WeekStrip';
+import { useI18n } from '../i18n';
 import { bottomOfRange, nextRoutine, topOfRange } from '../plans';
 import { bestWeightFor, lastSetsFor, useStore } from '../store';
 import { colors, spacing, type } from '../theme';
 import { WorkoutExercise, WorkoutSet } from '../types';
 import {
   completedSets,
-  formatDate,
-  formatKg,
   formatTimer,
-  greeting,
+  sanitizeReps,
   sanitizeWeight,
   startOfWeek,
   workoutVolume,
@@ -41,6 +41,8 @@ export function WorkoutScreen() {
 
 function Home() {
   const { state, dispatch, exerciseById } = useStore();
+  const { t, exerciseName, formatDate, formatKg, greeting, workoutName } =
+    useI18n();
   const weekStart = startOfWeek(Date.now());
   const thisWeek = state.history.filter(w => w.startedAt >= weekStart);
   const weekVolume = thisWeek.reduce((n, w) => n + workoutVolume(w), 0);
@@ -48,28 +50,32 @@ function Home() {
   const last = state.history[0];
   const next = nextRoutine(state.routines, state.history);
   const hasPlan = state.routines.length > 0;
+  const nameOf = (id: string) => {
+    const ex = exerciseById(id);
+    return ex ? exerciseName(ex) : t('workout.deleted');
+  };
 
   const repeat = () => {
     if (!last) return;
-    dispatch({ type: 'startWorkout' });
+    dispatch({ type: 'startWorkout', name: last.name });
     dispatch({
       type: 'addToWorkout',
       exerciseIds: last.exercises.map(e => e.exerciseId),
     });
-    dispatch({ type: 'renameWorkout', name: last.name });
   };
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
-      <Header kicker={greeting()} title="Ready to lift?" />
+      <Header kicker={greeting()} title={t('home.title')} />
       <View style={styles.pad}>
         <Card>
           <View style={styles.rowBetween}>
-            <Text style={type.kicker}>This week</Text>
+            <Text style={type.kicker}>{t('home.thisWeek')}</Text>
             <Text style={styles.weekCount}>
               {thisWeek.length}
               <Text style={styles.muted}>
-                {hasPlan ? ` / ${state.routines.length}` : ''} workouts
+                {hasPlan ? ` / ${state.routines.length}` : ''}{' '}
+                {t('home.workouts')}
               </Text>
             </Text>
           </View>
@@ -79,31 +85,38 @@ function Home() {
         </Card>
 
         <View style={styles.tiles}>
-          <StatTile label="Volume" value={formatKg(weekVolume)} />
-          <StatTile label="Sets" value={String(weekSets)} />
-          <StatTile label="All time" value={String(state.history.length)} />
+          <StatTile label={t('home.volume')} value={formatKg(weekVolume)} />
+          <StatTile label={t('home.sets')} value={String(weekSets)} />
+          <StatTile
+            label={t('home.allTime')}
+            value={String(state.history.length)}
+          />
         </View>
 
         {next ? (
           <>
             <Button
               big
-              title={`START ${next.name.toUpperCase()}`}
+              title={t('home.startDay', { name: next.name.toUpperCase() })}
               onPress={() => dispatch({ type: 'startRoutine', id: next.id })}
               style={{ marginTop: spacing(4) }}
             />
             <Button
-              title="or start an empty workout"
+              title={t('home.startEmpty')}
               variant="ghost"
-              onPress={() => dispatch({ type: 'startWorkout' })}
+              onPress={() =>
+                dispatch({ type: 'startWorkout', name: workoutName() })
+              }
               style={{ marginBottom: spacing(2) }}
             />
           </>
         ) : (
           <Button
             big
-            title="START WORKOUT"
-            onPress={() => dispatch({ type: 'startWorkout' })}
+            title={t('home.startWorkout')}
+            onPress={() =>
+              dispatch({ type: 'startWorkout', name: workoutName() })
+            }
             style={{ marginVertical: spacing(4) }}
           />
         )}
@@ -113,25 +126,25 @@ function Home() {
         {!hasPlan && last ? (
           <Card>
             <Text style={type.kicker}>
-              Last session · {formatDate(last.startedAt)}
+              {t('home.lastSession', { date: formatDate(last.startedAt) })}
             </Text>
             <Text style={styles.lastName}>{last.name}</Text>
             <View style={styles.chips}>
               {last.exercises.map(e => (
                 <View key={e.id} style={styles.chip}>
-                  <Text style={styles.chipText}>
-                    {exerciseById(e.exerciseId)?.name ?? 'Deleted'}
-                  </Text>
+                  <Text style={styles.chipText}>{nameOf(e.exerciseId)}</Text>
                 </View>
               ))}
             </View>
             <Button
-              title="↻  Repeat this workout"
+              title={t('home.repeat')}
               variant="secondary"
               onPress={repeat}
             />
           </Card>
         ) : null}
+
+        <LanguageSwitcher />
       </View>
     </ScrollView>
   );
@@ -141,6 +154,7 @@ function Home() {
 
 function ActiveWorkout() {
   const { state, dispatch, exerciseById } = useStore();
+  const { t, exerciseName, muscleName, formatKg } = useI18n();
   const active = state.active!;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -154,34 +168,33 @@ function ActiveWorkout() {
   const finish = () => {
     const done = completedSets(active);
     if (done === 0) {
-      Alert.alert(
-        'No completed sets',
-        'Tick off at least one set before finishing, or discard this workout.',
-      );
+      Alert.alert(t('finish.noSetsTitle'), t('finish.noSetsBody'));
       return;
     }
     const total = active.exercises.reduce((n, e) => n + e.sets.length, 0);
     const skipped = total - done;
     Alert.alert(
-      'Finish workout?',
-      `${done} sets · ${formatKg(workoutVolume(active))} moved. Nice work.` +
-        (skipped > 0
-          ? `\n\n${skipped} unticked set${
-              skipped > 1 ? 's' : ''
-            } won't be saved.`
-          : ''),
+      t('finish.title'),
+      t('finish.message', {
+        sets: t('count.set', { count: done }),
+        volume: formatKg(workoutVolume(active)),
+      }) +
+        (skipped > 0 ? `\n\n${t('finish.skipped', { count: skipped })}` : ''),
       [
-        { text: 'Keep going', style: 'cancel' },
-        { text: 'Finish', onPress: () => dispatch({ type: 'finishWorkout' }) },
+        { text: t('finish.keepGoing'), style: 'cancel' },
+        {
+          text: t('common.finish'),
+          onPress: () => dispatch({ type: 'finishWorkout' }),
+        },
       ],
     );
   };
 
   const discard = () =>
-    Alert.alert('Discard workout?', 'All logged sets will be lost.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('discard.title'), t('discard.body'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Discard',
+        text: t('common.discard'),
         style: 'destructive',
         onPress: () => dispatch({ type: 'discardWorkout' }),
       },
@@ -194,7 +207,9 @@ function ActiveWorkout() {
     >
       <View style={styles.activeTop}>
         <View style={styles.flex}>
-          <Text style={[type.kicker, { color: colors.accent }]}>● Live</Text>
+          <Text style={[type.kicker, { color: colors.accent }]}>
+            {t('workout.live')}
+          </Text>
           {fromPlan ? (
             <Text
               style={styles.workoutName}
@@ -208,12 +223,12 @@ function ActiveWorkout() {
               value={active.name}
               onChangeText={name => dispatch({ type: 'renameWorkout', name })}
               style={styles.workoutName}
-              accessibilityLabel="Workout name"
+              accessibilityLabel={t('workout.nameA11y')}
               returnKeyType="done"
             />
           )}
         </View>
-        <Button title="Finish" onPress={finish} />
+        <Button title={t('common.finish')} onPress={finish} />
       </View>
 
       <ScrollView
@@ -223,8 +238,14 @@ function ActiveWorkout() {
       >
         <View style={styles.tiles}>
           <Clock startedAt={active.startedAt} />
-          <StatTile label="Sets" value={String(completedSets(active))} />
-          <StatTile label="Volume" value={formatKg(workoutVolume(active))} />
+          <StatTile
+            label={t('home.sets')}
+            value={String(completedSets(active))}
+          />
+          <StatTile
+            label={t('home.volume')}
+            value={formatKg(workoutVolume(active))}
+          />
         </View>
 
         <RestSetting />
@@ -232,10 +253,10 @@ function ActiveWorkout() {
         {canReorder ? (
           <View style={styles.listHead}>
             <Text style={[type.kicker, styles.flex]}>
-              {showReorder ? 'Drag ≡ to set your order' : 'Exercises'}
+              {showReorder ? t('workout.dragHint') : t('workout.exercises')}
             </Text>
             <Button
-              title={showReorder ? 'Done' : '⇅  Reorder'}
+              title={showReorder ? t('common.done') : t('workout.reorder')}
               variant={showReorder ? 'primary' : 'secondary'}
               onPress={() => setReordering(r => !r)}
               style={styles.reorderBtn}
@@ -250,10 +271,13 @@ function ActiveWorkout() {
               const done = we.sets.filter(s => s.done).length;
               return {
                 id: we.id,
-                title: ex?.name ?? 'Deleted exercise',
-                subtitle: `${ex?.muscle ?? ''}${ex ? ' · ' : ''}${done}/${
-                  we.sets.length
-                } sets done`,
+                title: ex ? exerciseName(ex) : t('workout.deletedExercise'),
+                subtitle: [
+                  ex ? muscleName(ex.muscle) : '',
+                  t('workout.setsDone', { done, count: we.sets.length }),
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
               };
             })}
             onReorder={ids =>
@@ -268,12 +292,16 @@ function ActiveWorkout() {
         )}
 
         <Button
-          title="+  Add exercises"
+          title={t('workout.addExercises')}
           variant="secondary"
           onPress={() => setPickerOpen(true)}
           style={styles.addBtn}
         />
-        <Button title="Discard workout" variant="ghost" onPress={discard} />
+        <Button
+          title={t('workout.discard')}
+          variant="ghost"
+          onPress={discard}
+        />
       </ScrollView>
 
       <ExercisePicker
@@ -288,11 +316,12 @@ function ActiveWorkout() {
 
 function RestSetting() {
   const { state, dispatch } = useStore();
+  const { t } = useI18n();
   const change = (d: number) =>
     dispatch({ type: 'setRestSeconds', seconds: state.restSeconds + d });
   return (
     <View style={styles.restSetting}>
-      <Text style={styles.muted}>Rest between sets</Text>
+      <Text style={styles.muted}>{t('workout.restBetween')}</Text>
       <View style={styles.restCtrls}>
         <Pressable
           onPress={() => change(-15)}
@@ -324,7 +353,9 @@ function ExerciseBlock({
   onSetDone: () => void;
 }) {
   const { state, dispatch, exerciseById } = useStore();
+  const { t, exerciseName, muscleName, ltr } = useI18n();
   const exercise = exerciseById(we.exerciseId);
+  const name = exercise ? exerciseName(exercise) : t('workout.deletedExercise');
   const previous = lastSetsFor(state.history, we.exerciseId);
   const best = bestWeightFor(state.history, we.exerciseId);
   const doneCount = we.sets.filter(s => s.done).length;
@@ -341,10 +372,10 @@ function ExerciseBlock({
     : '';
 
   const remove = () =>
-    Alert.alert('Remove exercise?', exercise?.name, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('removeExercise.title'), name, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Remove',
+        text: t('common.remove'),
         style: 'destructive',
         onPress: () =>
           dispatch({ type: 'removeFromWorkout', workoutExerciseId: we.id }),
@@ -356,15 +387,19 @@ function ExerciseBlock({
       <View style={styles.exHeader}>
         <ExerciseIcon exercise={exercise} size={48} />
         <View style={styles.flex}>
-          <Text style={styles.exName}>
-            {exercise?.name ?? 'Deleted exercise'}
-          </Text>
+          <Text style={styles.exName}>{name}</Text>
           <Text style={styles.exMeta}>
-            {exercise?.muscle ?? ''}
-            {we.targetReps
-              ? ` · Target ${we.sets.length} × ${we.targetReps}`
-              : ''}
-            {best > 0 ? ` · Best ${best} kg` : ''}
+            {[
+              exercise ? muscleName(exercise.muscle) : '',
+              we.targetReps
+                ? t('exercise.target', {
+                    range: ltr(`${we.sets.length} × ${we.targetReps}`),
+                  })
+                : '',
+              best > 0 ? t('exercise.best', { weight: best }) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         </View>
         <Text style={styles.exProgress}>
@@ -375,7 +410,11 @@ function ExerciseBlock({
           hitSlop={10}
           style={styles.removeBtn}
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${exercise?.name ?? 'exercise'}`}
+          accessibilityLabel={
+            exercise
+              ? t('exercise.removeA11y', { name })
+              : t('exercise.removeFallbackA11y')
+          }
         >
           <Text style={styles.removeText}>✕</Text>
         </Pressable>
@@ -384,17 +423,18 @@ function ExerciseBlock({
       {readyToProgress ? (
         <View style={styles.hint}>
           <Text style={styles.hintText}>
-            ↑ You hit {target} reps on every set last time. Try {lastTop + 2.5}{' '}
-            kg today.
+            {t('exercise.hint', { target, weight: lastTop + 2.5 })}
           </Text>
         </View>
       ) : null}
 
       <View style={styles.setRow}>
-        <Text style={[styles.colSet, styles.colHead]}>SET</Text>
-        <Text style={[styles.colPrev, styles.colHead]}>PREVIOUS</Text>
-        <Text style={[styles.colInput, styles.colHead]}>KG</Text>
-        <Text style={[styles.colInput, styles.colHead]}>REPS</Text>
+        <Text style={[styles.colSet, styles.colHead]}>{t('set.colSet')}</Text>
+        <Text style={[styles.colPrev, styles.colHead]}>{t('set.colPrev')}</Text>
+        <Text style={[styles.colInput, styles.colHead]}>{t('set.colKg')}</Text>
+        <Text style={[styles.colInput, styles.colHead]}>
+          {t('set.colReps')}
+        </Text>
         <View style={styles.colCheck} />
       </View>
 
@@ -429,9 +469,13 @@ function ExerciseBlock({
         onPress={() => dispatch({ type: 'addSet', workoutExerciseId: we.id })}
         style={styles.addSet}
         accessibilityRole="button"
-        accessibilityLabel={`Add set to ${exercise?.name ?? 'exercise'}`}
+        accessibilityLabel={
+          exercise
+            ? t('exercise.addSetA11y', { name })
+            : t('exercise.addSetFallbackA11y')
+        }
       >
-        <Text style={styles.addSetText}>+ Add set</Text>
+        <Text style={styles.addSetText}>{t('set.add')}</Text>
       </Pressable>
     </Card>
   );
@@ -456,6 +500,7 @@ function SetRow({
   onRemove: () => void;
   onDone: () => void;
 }) {
+  const { t, ltr } = useI18n();
   const weightHint = prev?.weight || '';
   const repsHint = prev?.reps || fallbackReps;
   const toggle = () => {
@@ -467,7 +512,7 @@ function SetRow({
     const weight = s.weight || weightHint;
     const reps = s.reps || repsHint;
     if (!(parseInt(reps, 10) > 0)) {
-      Alert.alert('How many reps?', 'Enter your reps before ticking the set.');
+      Alert.alert(t('set.repsTitle'), t('set.repsBody'));
       return;
     }
     Vibration.vibrate(15);
@@ -475,9 +520,9 @@ function SetRow({
     onUpdate({ done: true, weight, reps });
   };
   const confirmRemove = () =>
-    Alert.alert(`Remove set ${index + 1}?`, undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: onRemove },
+    Alert.alert(t('set.removeTitle', { n: index + 1 }), undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.remove'), style: 'destructive', onPress: onRemove },
     ]);
   return (
     <View>
@@ -486,7 +531,7 @@ function SetRow({
           style={styles.colSet}
           onPress={confirmRemove}
           accessibilityRole="button"
-          accessibilityLabel={`Set ${index + 1}. Tap to remove`}
+          accessibilityLabel={t('set.removeA11y', { n: index + 1 })}
         >
           <Text style={[styles.setNum, s.done && styles.setNumDone]}>
             {index + 1}
@@ -501,31 +546,31 @@ function SetRow({
           accessibilityRole="button"
           accessibilityLabel={
             prev
-              ? `Use previous: ${prev.weight} kg, ${prev.reps} reps`
-              : 'No previous set'
+              ? t('set.usePrevious', { weight: prev.weight, reps: prev.reps })
+              : t('set.noPrevious')
           }
         >
           <Text style={styles.prev}>
-            {prev ? `${prev.weight || 0} × ${prev.reps || 0}` : '—'}
+            {prev ? ltr(`${prev.weight || 0} × ${prev.reps || 0}`) : '—'}
           </Text>
         </Pressable>
         <TextInput
           style={[styles.colInput, styles.input, s.done && styles.inputDone]}
           value={s.weight}
-          onChangeText={t => onUpdate({ weight: sanitizeWeight(t) })}
+          onChangeText={text => onUpdate({ weight: sanitizeWeight(text) })}
           keyboardType="decimal-pad"
           placeholder={weightHint || '0'}
-          accessibilityLabel={`Set ${index + 1} weight in kilograms`}
+          accessibilityLabel={t('set.weightA11y', { n: index + 1 })}
           placeholderTextColor={colors.muted}
           selectTextOnFocus
         />
         <TextInput
           style={[styles.colInput, styles.input, s.done && styles.inputDone]}
           value={s.reps}
-          onChangeText={t => onUpdate({ reps: t.replace(/\D/g, '') })}
+          onChangeText={text => onUpdate({ reps: sanitizeReps(text) })}
           keyboardType="number-pad"
           placeholder={repsHint || '0'}
-          accessibilityLabel={`Set ${index + 1} reps`}
+          accessibilityLabel={t('set.repsA11y', { n: index + 1 })}
           placeholderTextColor={colors.muted}
           selectTextOnFocus
         />
@@ -535,7 +580,7 @@ function SetRow({
           hitSlop={6}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: s.done }}
-          accessibilityLabel={`Complete set ${index + 1}`}
+          accessibilityLabel={t('set.completeA11y', { n: index + 1 })}
         >
           <Text style={[styles.checkMark, s.done && styles.checkMarkOn]}>
             ✓
@@ -544,7 +589,7 @@ function SetRow({
       </View>
       {isPR ? (
         <View style={styles.prRow}>
-          <Pill tone="gold" text="🏆 NEW PERSONAL RECORD" />
+          <Pill tone="gold" text={t('set.pr')} />
         </View>
       ) : null}
     </View>
@@ -552,12 +597,15 @@ function SetRow({
 }
 
 function Clock({ startedAt }: { startedAt: number }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
-  return <StatTile label="Time" value={formatTimer(now - startedAt)} />;
+  return (
+    <StatTile label={t('workout.time')} value={formatTimer(now - startedAt)} />
+  );
 }
 
 const styles = StyleSheet.create({

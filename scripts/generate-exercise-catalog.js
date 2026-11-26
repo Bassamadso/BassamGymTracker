@@ -5,6 +5,9 @@
  *
  *   npm run catalog                 # download the latest dataset
  *   npm run catalog -- ./local.json # or use a local copy
+ *
+ * New exercises need an Arabic name in src/i18n/exerciseNames.ar.ts (until
+ * then they show in English); `npm test` lists any that are missing.
  */
 const fs = require('fs');
 const path = require('path');

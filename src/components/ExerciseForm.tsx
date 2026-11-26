@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useI18n } from '../i18n';
 import { useStore } from '../store';
 import { colors, spacing } from '../theme';
 import { Exercise, MUSCLE_GROUPS, MuscleGroup } from '../types';
 import { uid } from '../utils';
+import { Text } from './Text';
 import { Button } from './ui';
 
 /** Inline form for creating a custom exercise. */
@@ -15,6 +17,7 @@ export function ExerciseForm({
   onCancel: () => void;
 }) {
   const { dispatch } = useStore();
+  const { t, muscleName } = useI18n();
   const [name, setName] = useState('');
   const [muscle, setMuscle] = useState<MuscleGroup>('Chest');
 
@@ -31,7 +34,7 @@ export function ExerciseForm({
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="Exercise name"
+        placeholder={t('form.namePlaceholder')}
         placeholderTextColor={colors.muted}
         style={styles.input}
         autoFocus
@@ -44,20 +47,20 @@ export function ExerciseForm({
             style={[styles.chip, muscle === m && styles.chipActive]}
           >
             <Text style={[styles.chipText, muscle === m && styles.chipTextOn]}>
-              {m}
+              {muscleName(m)}
             </Text>
           </Pressable>
         ))}
       </View>
       <View style={styles.row}>
         <Button
-          title="Cancel"
+          title={t('common.cancel')}
           variant="secondary"
           onPress={onCancel}
           style={styles.flex}
         />
         <Button
-          title="Save"
+          title={t('common.save')}
           onPress={save}
           disabled={!name.trim()}
           style={styles.flex}

@@ -6,26 +6,21 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ExerciseIcon } from '../components/ExerciseIcon';
+import { Text } from '../components/Text';
 import { Button, Card, Empty, Header, Pill, StatTile } from '../components/ui';
+import { useI18n } from '../i18n';
 import { useStore } from '../store';
 import { colors, spacing, type } from '../theme';
 import { Workout } from '../types';
-import {
-  completedSets,
-  formatDate,
-  formatDuration,
-  formatKg,
-  prCounts,
-  workoutVolume,
-} from '../utils';
+import { completedSets, prCounts, workoutVolume } from '../utils';
 
 export function HistoryScreen() {
   const { state } = useStore();
+  const { t, formatKg } = useI18n();
   const [open, setOpen] = useState<number | null>(null);
   const total = useMemo(
     () => state.history.reduce((n, w) => n + workoutVolume(w), 0),
@@ -41,22 +36,22 @@ export function HistoryScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <>
-            <Header kicker="Your journey" title="History" />
+            <Header kicker={t('history.kicker')} title={t('history.title')} />
             {state.history.length ? (
               <View style={[styles.tiles, styles.pad]}>
                 <StatTile
-                  label="Workouts"
+                  label={t('history.workouts')}
                   value={String(state.history.length)}
                 />
-                <StatTile label="Lifted" value={formatKg(total)} />
+                <StatTile label={t('history.lifted')} value={formatKg(total)} />
               </View>
             ) : null}
           </>
         }
         ListEmptyComponent={
           <Empty
-            title="Nothing logged yet"
-            subtitle="Finish your first workout and it'll show up here with all its numbers."
+            title={t('history.emptyTitle')}
+            subtitle={t('history.emptyBody')}
           />
         }
         renderItem={({ item, index }) => (
@@ -78,13 +73,14 @@ export function HistoryScreen() {
 
 function WorkoutSummary({ workout, prs }: { workout: Workout; prs: number }) {
   const { exerciseById } = useStore();
+  const { t, exerciseName, formatDuration, formatKg, monthShort } = useI18n();
   const d = new Date(workout.startedAt);
   return (
     <Card style={styles.summary}>
       <View style={styles.dateBlock}>
         <Text style={styles.dateDay}>{d.getDate()}</Text>
         <Text style={styles.dateMonth}>
-          {d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+          {monthShort(workout.startedAt).toUpperCase()}
         </Text>
       </View>
       <View style={styles.flex}>
@@ -95,16 +91,20 @@ function WorkoutSummary({ workout, prs }: { workout: Workout; prs: number }) {
           {prs > 0 ? <Pill tone="gold" text={`🏆 ${prs}`} /> : null}
         </View>
         <Text style={styles.meta}>
-          {formatDuration(
-            (workout.finishedAt ?? workout.startedAt) - workout.startedAt,
-          )}
-          {'  ·  '}
-          {completedSets(workout)} sets{'  ·  '}
-          {formatKg(workoutVolume(workout))}
+          {[
+            formatDuration(
+              (workout.finishedAt ?? workout.startedAt) - workout.startedAt,
+            ),
+            t('count.set', { count: completedSets(workout) }),
+            formatKg(workoutVolume(workout)),
+          ].join('  ·  ')}
         </Text>
         <Text style={styles.exList} numberOfLines={2}>
           {workout.exercises
-            .map(e => exerciseById(e.exerciseId)?.name ?? 'Deleted')
+            .map(e => {
+              const ex = exerciseById(e.exerciseId);
+              return ex ? exerciseName(ex) : t('workout.deleted');
+            })
             .join(' · ')}
         </Text>
       </View>
@@ -122,12 +122,13 @@ function WorkoutDetail({
   onClose: () => void;
 }) {
   const { dispatch, exerciseById } = useStore();
+  const { t, exerciseName, formatDate, formatDuration, formatKg } = useI18n();
 
   const del = () =>
-    Alert.alert('Delete workout?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('history.deleteTitle'), t('history.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           onClose();
@@ -142,30 +143,37 @@ function WorkoutDetail({
         <Header
           kicker={formatDate(workout.startedAt)}
           title={workout.name}
-          right={<Button title="Close" variant="ghost" onPress={onClose} />}
+          right={
+            <Button
+              title={t('common.close')}
+              variant="ghost"
+              onPress={onClose}
+            />
+          }
         />
         <ScrollView contentContainerStyle={[styles.pad, styles.list]}>
           <View style={[styles.tiles, { marginBottom: spacing(4) }]}>
             <StatTile
-              label="Time"
+              label={t('workout.time')}
               value={formatDuration(
                 (workout.finishedAt ?? workout.startedAt) - workout.startedAt,
               )}
             />
-            <StatTile label="Volume" value={formatKg(workoutVolume(workout))} />
-            <StatTile label="PRs" value={String(prs)} />
+            <StatTile
+              label={t('home.volume')}
+              value={formatKg(workoutVolume(workout))}
+            />
+            <StatTile label={t('history.prs')} value={String(prs)} />
           </View>
           {workout.exercises.map(e => {
             const top = Math.max(...e.sets.map(s => parseFloat(s.weight) || 0));
+            const ex = exerciseById(e.exerciseId);
             return (
               <Card key={e.id}>
                 <View style={styles.exHead}>
-                  <ExerciseIcon
-                    exercise={exerciseById(e.exerciseId)}
-                    size={40}
-                  />
+                  <ExerciseIcon exercise={ex} size={40} />
                   <Text style={[styles.exName, styles.flex]}>
-                    {exerciseById(e.exerciseId)?.name ?? 'Deleted exercise'}
+                    {ex ? exerciseName(ex) : t('workout.deletedExercise')}
                   </Text>
                 </View>
                 {e.sets.map((s, i) => {
@@ -174,7 +182,10 @@ function WorkoutDetail({
                     <View key={s.id} style={styles.setRow}>
                       <Text style={styles.setNum}>{i + 1}</Text>
                       <Text style={[styles.setText, isTop && styles.setTop]}>
-                        {s.weight || 0} kg × {s.reps || 0}
+                        {t('set.line', {
+                          weight: s.weight || 0,
+                          reps: s.reps || 0,
+                        })}
                       </Text>
                     </View>
                   );
@@ -182,7 +193,11 @@ function WorkoutDetail({
               </Card>
             );
           })}
-          <Button title="Delete workout" variant="danger" onPress={del} />
+          <Button
+            title={t('history.deleteButton')}
+            variant="danger"
+            onPress={del}
+          />
         </ScrollView>
       </SafeAreaView>
     </Modal>

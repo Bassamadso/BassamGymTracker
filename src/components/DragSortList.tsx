@@ -14,6 +14,7 @@ import {
   View,
   ViewProps,
 } from 'react-native';
+import { useI18n } from '../i18n';
 import { spacing } from '../theme';
 import { moveItem, slotAt } from '../utils';
 
@@ -257,6 +258,7 @@ function Row({
   onMoveBy: (delta: number) => void;
   render: (state: DragItemState) => React.ReactNode;
 }) {
+  const { t } = useI18n();
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -276,8 +278,8 @@ function Row({
     ...pan.panHandlers,
     accessible: true,
     accessibilityActions: [
-      { name: 'moveUp', label: 'Move up' },
-      { name: 'moveDown', label: 'Move down' },
+      { name: 'moveUp', label: t('reorder.moveUp') },
+      { name: 'moveDown', label: t('reorder.moveDown') },
     ],
     onAccessibilityAction: (e: AccessibilityActionEvent) =>
       onMoveBy(e.nativeEvent.actionName === 'moveUp' ? -1 : 1),

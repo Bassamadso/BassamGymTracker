@@ -4,16 +4,17 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useI18n } from '../i18n';
 import { useStore } from '../store';
 import { colors, spacing } from '../theme';
 import { MUSCLE_GROUPS, MuscleGroup } from '../types';
 import { ExerciseForm } from './ExerciseForm';
 import { ExerciseIcon } from './ExerciseIcon';
+import { Text } from './Text';
 import { Button } from './ui';
 
 /** Full-screen modal to pick one or more exercises to add to a workout. */
@@ -30,22 +31,24 @@ export function ExercisePicker({
   existingIds?: string[];
 }) {
   const { state } = useStore();
+  const { t, exerciseName, muscleName, matchesSearch, compare } = useI18n();
   const [query, setQuery] = useState('');
   const [muscle, setMuscle] = useState<MuscleGroup | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
-  const list = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return state.exercises
-      .filter(
-        e =>
-          !e.archived &&
-          (!muscle || e.muscle === muscle) &&
-          e.name.toLowerCase().includes(q),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [state.exercises, query, muscle]);
+  const list = useMemo(
+    () =>
+      state.exercises
+        .filter(
+          e =>
+            !e.archived &&
+            (!muscle || e.muscle === muscle) &&
+            matchesSearch(e, query),
+        )
+        .sort((a, b) => compare(exerciseName(a), exerciseName(b))),
+    [state.exercises, query, muscle, matchesSearch, compare, exerciseName],
+  );
 
   const toggle = (id: string) =>
     setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
@@ -67,10 +70,14 @@ export function ExercisePicker({
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
       <SafeAreaView style={styles.root}>
         <View style={styles.top}>
-          <Button title="Cancel" variant="ghost" onPress={close} />
-          <Text style={styles.title}>Add Exercises</Text>
+          <Button title={t('common.cancel')} variant="ghost" onPress={close} />
+          <Text style={styles.title}>{t('picker.title')}</Text>
           <Button
-            title={selected.length ? `Add (${selected.length})` : 'Add'}
+            title={
+              selected.length
+                ? t('picker.addCount', { count: selected.length })
+                : t('common.add')
+            }
             variant="ghost"
             onPress={confirm}
             disabled={!selected.length}
@@ -81,7 +88,7 @@ export function ExercisePicker({
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search exercises"
+            placeholder={t('library.search')}
             placeholderTextColor={colors.muted}
             style={styles.search}
           />
@@ -102,7 +109,7 @@ export function ExercisePicker({
                     muscle === item && styles.chipTextOn,
                   ]}
                 >
-                  {item ?? 'All'}
+                  {item ? muscleName(item) : t('picker.all')}
                 </Text>
               </Pressable>
             )}
@@ -117,7 +124,7 @@ export function ExercisePicker({
             />
           ) : (
             <Button
-              title="+ Create new exercise"
+              title={t('picker.create')}
               variant="secondary"
               onPress={() => setCreating(true)}
               style={{ marginBottom: spacing(3) }}
@@ -143,9 +150,13 @@ export function ExercisePicker({
               >
                 <ExerciseIcon exercise={item} size={48} />
                 <View style={styles.flex}>
-                  <Text style={styles.name}>{item.name}</Text>
+                  <Text style={styles.name}>{exerciseName(item)}</Text>
                   <Text style={styles.muscle}>
-                    {added ? `${item.muscle} · already added` : item.muscle}
+                    {added
+                      ? `${muscleName(item.muscle)} · ${t(
+                          'picker.alreadyAdded',
+                        )}`
+                      : muscleName(item.muscle)}
                   </Text>
                 </View>
                 <View style={[styles.check, on && styles.checkOn]}>

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { exerciseImageUrl } from '../exerciseImages';
+import { useI18n } from '../i18n';
 import { colors } from '../theme';
 import { Exercise } from '../types';
+import { Text } from './Text';
 
 /** "Barbell Curl" → "BC", "Plank" → "P". Shown when there is no photo. */
 function initials(name: string) {
-  const words = name.match(/[A-Za-z0-9]+/g) ?? [];
+  const words = name.match(/[A-Za-z0-9\u0621-\u064A]+/g) ?? [];
   return words
     .slice(0, 2)
     .map(w => w[0].toUpperCase())
@@ -24,6 +26,8 @@ export function ExerciseIcon({
   exercise: Pick<Exercise, 'id' | 'name'> | null | undefined;
   size?: number;
 }) {
+  const { exerciseName } = useI18n();
+  // Photos are matched on the stored (English) name; initials use the shown one
   const url = exerciseImageUrl(exercise);
   // Remember which url failed, so a different exercise reusing this row retries
   const [failed, setFailed] = useState<string | null>(null);
@@ -40,7 +44,7 @@ export function ExerciseIcon({
       importantForAccessibility="no-hide-descendants"
     >
       <Text style={[styles.initials, { fontSize: Math.round(size * 0.34) }]}>
-        {exercise ? initials(exercise.name) : '?'}
+        {exercise ? initials(exerciseName(exercise)) : '?'}
       </Text>
       {showImage ? (
         <Image

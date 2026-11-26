@@ -1,3 +1,4 @@
+import { createI18n } from '../src/i18n/core';
 import { buildPlan, nextRoutine, SPLITS } from '../src/plans';
 import {
   bestWeightFor,
@@ -16,6 +17,8 @@ import {
   slotAt,
   workoutVolume,
 } from '../src/utils';
+
+const { t } = createI18n('en', false);
 
 const loaded: State = { ...initialState, loaded: true };
 
@@ -135,23 +138,23 @@ test('rest timer setting is clamped and PRs use the best logged weight', () => {
 describe('weekly plan', () => {
   test('builds a 3–6 day split from the exercise library', () => {
     for (const split of SPLITS) {
-      const plan = buildPlan(split, loaded.exercises);
+      const plan = buildPlan(split, loaded.exercises, t);
       expect(plan).toHaveLength(split.days);
       plan.forEach(r => expect(r.exercises.length).toBeGreaterThan(0));
     }
-    expect(buildPlan(SPLITS[0], loaded.exercises).map(r => r.name)).toEqual([
+    expect(buildPlan(SPLITS[0], loaded.exercises, t).map(r => r.name)).toEqual([
       'Push',
       'Pull',
       'Legs',
     ]);
-    expect(buildPlan({ days: 4 }, loaded.exercises)[3]).toMatchObject({
+    expect(buildPlan({ days: 4 }, loaded.exercises, t)[3]).toMatchObject({
       name: 'Day 4',
       exercises: [],
     });
   });
 
   test('starting a day creates its sets and next time pre-fills last weights', () => {
-    const routines = buildPlan(SPLITS[0], loaded.exercises);
+    const routines = buildPlan(SPLITS[0], loaded.exercises, t);
     let s = reducer(loaded, { type: 'setPlan', routines });
     expect(nextRoutine(s.routines, s.history)?.name).toBe('Push');
 
@@ -180,7 +183,7 @@ describe('weekly plan', () => {
   });
 
   test('routines can be edited and deleted', () => {
-    const [push] = buildPlan(SPLITS[0], loaded.exercises);
+    const [push] = buildPlan(SPLITS[0], loaded.exercises, t);
     let s = reducer(loaded, { type: 'saveRoutine', routine: push });
     s = reducer(s, {
       type: 'saveRoutine',

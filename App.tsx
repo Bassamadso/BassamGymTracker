@@ -5,10 +5,13 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BrandSplash } from './src/components/BrandSplash';
 import { RestTimer } from './src/components/RestTimer';
+import { Text } from './src/components/Text';
+import { I18nProvider, useI18n } from './src/i18n';
+import type { MessageKey } from './src/i18n/en';
 import { ExercisesScreen } from './src/screens/ExercisesScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { WorkoutScreen } from './src/screens/WorkoutScreen';
@@ -17,40 +20,43 @@ import { colors, spacing } from './src/theme';
 
 type Tab = 'workout' | 'history' | 'exercises';
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'workout', label: 'Train', icon: '⚡' },
-  { key: 'history', label: 'History', icon: '◷' },
-  { key: 'exercises', label: 'Library', icon: '☰' },
+const TABS: { key: Tab; label: MessageKey; icon: string }[] = [
+  { key: 'workout', label: 'tab.train', icon: '⚡' },
+  { key: 'history', label: 'tab.history', icon: '◷' },
+  { key: 'exercises', label: 'tab.library', icon: '☰' },
 ];
 
 function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" />
-      <StoreProvider>
-        <Root />
-      </StoreProvider>
+      <I18nProvider>
+        <StoreProvider>
+          <Root />
+        </StoreProvider>
+      </I18nProvider>
     </SafeAreaProvider>
   );
 }
 
-/** Plays the brand intro over the app while saved data loads. */
+/** Plays the brand intro over the app while saved data and language load. */
 function Root() {
   const { state } = useStore();
+  const { ready: languageReady } = useI18n();
+  const loaded = state.loaded && languageReady;
   const [splash, setSplash] = useState(true);
   const hideSplash = useCallback(() => setSplash(false), []);
   return (
     <View style={styles.root}>
-      {state.loaded ? <AppContent /> : null}
-      {splash ? (
-        <BrandSplash ready={state.loaded} onFinish={hideSplash} />
-      ) : null}
+      {loaded ? <AppContent /> : null}
+      {splash ? <BrandSplash ready={loaded} onFinish={hideSplash} /> : null}
     </View>
   );
 }
 
 function AppContent() {
   const { state, dispatch } = useStore();
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('workout');
 
   const stopRest = useCallback(
@@ -74,21 +80,21 @@ function AppContent() {
         ) : null}
       </View>
       <View style={styles.tabBar}>
-        {TABS.map(t => {
-          const on = t.key === tab;
-          const live = t.key === 'workout' && state.active;
+        {TABS.map(item => {
+          const on = item.key === tab;
+          const live = item.key === 'workout' && state.active;
           return (
             <Pressable
-              key={t.key}
+              key={item.key}
               style={styles.tab}
-              onPress={() => setTab(t.key)}
+              onPress={() => setTab(item.key)}
             >
               <View style={[styles.tabInner, on && styles.tabInnerOn]}>
                 <Text style={[styles.tabIcon, on && styles.tabOn]}>
-                  {t.icon}
+                  {item.icon}
                 </Text>
                 <Text style={[styles.tabLabel, on && styles.tabOn]}>
-                  {t.label}
+                  {t(item.label)}
                 </Text>
                 {live ? <View style={styles.liveDot} /> : null}
               </View>

@@ -117,6 +117,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
+    // The wordmark and slogan are English brand text: keep them (and the
+    // margin that balances the letter-spacing) left-to-right in RTL too
+    direction: 'ltr',
   },
   logo: { width: 160, height: 160 },
   textBlock: {

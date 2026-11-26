@@ -5,9 +5,11 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Animated, PanResponder, StyleSheet, View } from 'react-native';
+import { useI18n } from '../i18n';
 import { colors, spacing } from '../theme';
 import { moveItem, slotAt } from '../utils';
+import { Text } from './Text';
 
 export interface ReorderItem {
   id: string;
@@ -178,6 +180,7 @@ function Row({
   onMove: (to: number) => void;
 }) {
   const { id } = item;
+  const { t } = useI18n();
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -196,10 +199,14 @@ function Row({
   return (
     <Animated.View
       accessible
-      accessibilityLabel={`${item.title}. Position ${index + 1} of ${count}`}
+      accessibilityLabel={t('reorder.position', {
+        title: item.title,
+        index: index + 1,
+        count,
+      })}
       accessibilityActions={[
-        { name: 'moveUp', label: 'Move up' },
-        { name: 'moveDown', label: 'Move down' },
+        { name: 'moveUp', label: t('reorder.moveUp') },
+        { name: 'moveDown', label: t('reorder.moveDown') },
       ]}
       onAccessibilityAction={e =>
         onMove(index + (e.nativeEvent.actionName === 'moveUp' ? -1 : 1))

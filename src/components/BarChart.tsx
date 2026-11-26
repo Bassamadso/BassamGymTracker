@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { colors, spacing } from '../theme';
+import { Text } from './Text';
 
 /** Minimal bar chart drawn with Views; the latest bar is highlighted. */
 export function BarChart({

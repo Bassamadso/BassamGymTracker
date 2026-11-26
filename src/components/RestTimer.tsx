@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { Pressable, StyleSheet, Vibration, View } from 'react-native';
+import { useI18n } from '../i18n';
 import { colors, spacing } from '../theme';
 import { formatTimer } from '../utils';
+import { Text } from './Text';
 
 /** Floating countdown shown between sets. Vibrates when time is up. */
 export function RestTimer({
@@ -15,12 +17,13 @@ export function RestTimer({
   onChange: (endsAt: number) => void;
   onDone: () => void;
 }) {
+  const { t, ltr } = useI18n();
   const [now, setNow] = useState(Date.now());
   const left = endsAt - now;
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -38,17 +41,17 @@ export function RestTimer({
       <View style={[styles.fill, { width: `${progress * 100}%` }]} />
       <View style={styles.row}>
         <Pressable style={styles.adj} onPress={() => onChange(endsAt - 15000)}>
-          <Text style={styles.adjText}>−15</Text>
+          <Text style={styles.adjText}>{ltr('−15')}</Text>
         </Pressable>
         <View style={styles.center}>
-          <Text style={styles.label}>REST</Text>
+          <Text style={styles.label}>{t('rest.label')}</Text>
           <Text style={styles.time}>{formatTimer(left + 999)}</Text>
         </View>
         <Pressable style={styles.adj} onPress={() => onChange(endsAt + 15000)}>
-          <Text style={styles.adjText}>+15</Text>
+          <Text style={styles.adjText}>{ltr('+15')}</Text>
         </Pressable>
         <Pressable style={styles.skip} onPress={onDone}>
-          <Text style={styles.skipText}>Skip</Text>
+          <Text style={styles.skipText}>{t('rest.skip')}</Text>
         </Pressable>
       </View>
     </View>
